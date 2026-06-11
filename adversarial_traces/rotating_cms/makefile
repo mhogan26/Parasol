@@ -1,5 +1,5 @@
 .PHONY: simulate interp compile interactive layout assemble test dfg preprocess_dfg
-LUCID_DIR = $(shell echo -n "$${LUCID_DIR:-../../../lucid}")
+LUCID_DIR = ~/Desktop/lucid
 OPT_DIR = ..
 
 # trace optimize w/ constant symbolics
@@ -16,14 +16,14 @@ interactive:
 
 # compile Lucid to P4
 compile: 
-	$(LUCID_DIR)/dptc rotating_cms.dpt --symb rotating_cms.symb 
+	$(LUCID_DIR)/dptc rotating_cms.dpt
 
 #layout
 layout:
-	$(LUCID_DIR)/bin/layout.py rotating_cms.dpt --symb rotating_cms.symb
+	$(LUCID_DIR)/bin/layout.py rotating_cms.dpt
 #dfg compile
 dfg:
-	$(LUCID_DIR)/bin/layout.py rotating_cms.dpt --symb rotating_cms.symb --dfg
+	$(LUCID_DIR)/bin/layout.py rotating_cms.dpt  --dfg
 
 
 # compile P4 to tofino
