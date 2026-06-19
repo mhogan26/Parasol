@@ -95,7 +95,8 @@ def start_interactive_simulation():
     # start with single trace file, that should have the same name as dpt file
     cmd = ["make", "interactive"]
 
-    process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    # change stdout if you want to process output from dpt
+    process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
 
     return process
 

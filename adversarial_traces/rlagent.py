@@ -6,7 +6,12 @@ import numpy as np
 import gym
 import random
 from collections import deque
+from data_reporter import DataReporter
 from simulator import *
+
+# constants
+NUM_TRAINING_EPISODES = 100
+REPORT_FILE = "results.csv"
 
 # Distribution of the packet: header information
 
@@ -37,6 +42,8 @@ class NetworkingEnv(gym.Env):
         self.round_counter = 0
         self.sequence_errors = []
 
+        self.reporter = DataReporter()
+
     def reset(self):
         self.state = np.zeros(self.state_dim)  # Reset state for three rounds
         return self.state
@@ -61,14 +68,14 @@ class NetworkingEnv(gym.Env):
         if self.budget <= 0:
             action = 0
 
-        print(self.avg_err)
         # Shift the state to include the new values and remove the oldest values
         new_state = np.roll(self.state, -3)
         new_state[-3:] = [self.budget, action, self.avg_err]
         self.state = new_state
         
-        print("background", num_backgroundpkts)
-        print("state", self.state)
+        self.reporter.add_frame(
+            self.reward, num_backgroundpkts, self.budget, action
+        )
         
         if done:
             # Reset for a new episode
@@ -230,7 +237,7 @@ class DQNAgent:
             total_rewards += episode_rewards
             print(f"Episode {episode + 1}: Total Reward = {episode_rewards}")
         avg_reward = total_rewards / episodes
-        print(f"Background Traffic and State Seq over {episodes} episodes: {state_seq}")
+        # print(f"Background Traffic and State Seq over {episodes} episodes: {state_seq}")
         print(f"Average Reward over {episodes} episodes: {avg_reward}")
 
 # Define the A2C Neural Network Model
@@ -361,7 +368,7 @@ class ActorCriticAgent:
             total_rewards += episode_rewards
             print(f"Episode {episode + 1}: Total Reward = {episode_rewards}")
         avg_reward = total_rewards / episodes
-        print(f"Background Traffic and State Seq over {episodes} episodes: {state_seq}")
+        # print(f"Background Traffic and State Seq over {episodes} episodes: {state_seq}")
         print(f"A2C Average Reward over {episodes} episodes: {avg_reward}")
 
 # Define the PPO Neural Network Model
@@ -422,6 +429,7 @@ class PPOAgent:
 
     def train(self, episodes=100):
         for e in range(episodes):
+            self.env.reporter.start_or_advance_step(episodes)
             state = self.env.reset()
             done = False
             while not done:
@@ -479,7 +487,7 @@ class PPOAgent:
             total_rewards += episode_rewards
             print(f"Episode {episode + 1}: Total Reward = {episode_rewards}")
         avg_reward = total_rewards / episodes
-        print(f"Background Traffic and State Seq over {episodes} episodes: {state_seq}")
+        # print(f"Background Traffic and State Seq over {episodes} episodes: {state_seq}")
         print(f"PPO Average Reward over {episodes} episodes: {avg_reward}")
 
 
@@ -497,21 +505,21 @@ def main():
     # agent = QLearningAgent(env)
 
     # Initialize and train with Different RL Agent
-    agent = DQNAgent(env)
+    # agent = DQNAgent(env)
     # agent = ActorCriticAgent(env)
-    # agent = PPOAgent(env)
+    agent = PPOAgent(env)
 
     # Train the Q-learning agent
-    num_episodes = 50 # change episodes
     start = time.time() # Record Time for Training
-    agent.train(episodes=num_episodes)
+    agent.train(episodes=NUM_TRAINING_EPISODES)
     end = time.time() # Record Time for Training
     training_time = end - start
-    print(f"Training Time for {num_episodes} is {training_time} seconds!!")
+    print(f"Training Time for {NUM_TRAINING_EPISODES} episodes is {training_time} seconds!!")
     
     # Test the trained Agent
-    print("\nTesting the trained DQN agent...")
+    print("\nTesting the trained agent...")
     agent.test()
+    env.reporter.report(REPORT_FILE)
 
     end_simulation(sim_process)
 
