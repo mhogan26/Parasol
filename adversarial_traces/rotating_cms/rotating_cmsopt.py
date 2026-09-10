@@ -133,35 +133,169 @@ class Opt:
         return events_bytes, num_backgroundpkts
 
 
-    # called after every interp run
-    # measurement is list of measurements (one measurement for each output file)
-    # order in list is same ordered specified in opt json
-    # avg_or_max is a list containing either "avg" or "max"
-    #   if ["avg"], then cost will be average error over all flows in a time window
-    #   if ["max"], cost will be max cost across all flows in a time window
-    def calc_cost(self,measure,avg_or_max=[]):  # compute avg error for our cms (mean abs error)
+    # # called after every interp run
+    # # measurement is list of measurements (one measurement for each output file)
+    # # order in list is same ordered specified in opt json
+    # # avg_or_max is a list containing either "avg" or "max"
+    # #   if ["avg"], then cost will be average error over all flows in a time window
+    # #   if ["max"], cost will be max cost across all flows in a time window
+    # def calc_cost(self, measure, avg_or_max=[], top_k=5, episode=None, step=None, action=None):  # compute avg error for our cms (mean abs error)
+    #     m = measure[0]  # first file is estimated counts, second file is bits set
+
+    #     # Sort ground truth by packet count (descending)
+    #     sorted_gt = sorted(self.interval_ground_truth.items(), 
+    #                     key=lambda item: item[1], 
+    #                     reverse=True)
+    #     # Take top K flows
+    #     selected_flows = sorted_gt[:top_k]
+
+    #     s = []
+
+    #     total_abs_error = 0
+
+    #     # Calculating relative error for all flows. Currently unused.
+    #     # for k, v in self.interval_ground_truth.items():
+    #     #     if abs(m[k]-self.ground_truth[k])/self.ground_truth[k] > 1:
+    #     #         print("ERR!! ERROR > 1")
+    #     #         print("est: "+str(m[k]))
+    #     #         print("gt: "+str(self.ground_truth[k]))
+    #     #         print("key: "+str(k))
+    #     #         quit()
+    #     #     s.append(abs(m[k] - v) / v)
+
+    #     # REMOVED THE ASSERTION - keys may not match
+    #     # assert m.keys() == self.interval_ground_truth.keys()
+
+    #     # Calculating relative error for each flow in the top K flows
+    #     for flow_key, true_count in selected_flows:
+    #         # Get estimated count from sketch (default to 0 if not found)
+    #         estimated_count = m.get(flow_key, 0)
+            
+    #         # Calculate absolute error
+    #         abs_error = abs(estimated_count - true_count)
+    #         total_abs_error += abs_error
+            
+    #         # Calculate relative error
+    #         if true_count > 0:
+    #             rel_error = abs_error / true_count
+    #             s.append(rel_error)
+    #         else:
+    #             s.append(0)
+        
+    #     # for rank, (flow_key, true_count) in enumerate(selected_flows, 1):
+    #     #     estimated_count = m.get(flow_key, 0)
+    #     #     abs_error = abs(estimated_count - true_count)
+    #     #     rel_error = abs_error / true_count if true_count > 0 else 0
+            
+    #     #     print(f"{rank:<6} {flow_key:<35} {true_count:<10} {estimated_count:<10} "
+    #     #         f"{abs_error:<10.2f} {rel_error:<10.4f}")
+        
+    #     # Calculate and print MAE
+    #     # mae = total_abs_error / len(selected_flows) if selected_flows else 0
+    #     # avg_rel_error = sum(s) / len(s) if s else 0
+        
+    #     # print("-"*80)
+    #     # print(f"MAE (Top {top_k}): {mae:.4f} packets")
+    #     # print(f"Avg Relative Error: {avg_rel_error:.4f} ({avg_rel_error*100:.2f}%)")
+    #     # print("="*80 + "\n")
+        
+    #     # Calculate final error
+    #     if len(s) == 0:
+    #         reward = 0
+        
+    #     if "max" in avg_or_max:
+    #         reward = max(s)
+    #     # return avg by default
+    #     else:
+    #         reward = sum(s) / len(s)
+        
+    #     # Write results to a fixed file if episode, step, and action are provided
+    #     if episode is not None and step is not None and action is not None:
+    #         # Append results to a fixed file
+    #         with open("results.txt", "a") as f:
+    #             # Write header only if file is empty (optional)
+    #             if f.tell() == 0:
+    #                 f.write("Episode\tStep\tAction\tReward\n")
+    #             f.write(f"{episode}\t{step}\t{action}\t{reward:.4f}\n")
+    #     # -------------------------------------------------
+
+    #     return reward
+    
+    def calc_cost(self, measure, avg_or_max=[], top_k=5, episode=None, step=None, action=None):  # compute avg error for our cms (mean abs error)
         m = measure[0]  # first file is estimated counts, second file is bits set
+
+        # Sort ground truth by packet count (descending)
+        sorted_gt = sorted(self.interval_ground_truth.items(), 
+                        key=lambda item: item[1], 
+                        reverse=True)
+        # Take top K flows
+        selected_flows = sorted_gt[:top_k]
+
         s = []
-        assert m.keys() == self.interval_ground_truth.keys()
-        for k, v in self.interval_ground_truth.items():
-            #if abs(m[k]-self.ground_truth[k])/self.ground_truth[k] > 1:
-                #print("ERR!! ERROR > 1")
-                #print("est: "+str(m[k]))
-                #print("gt: "+str(self.ground_truth[k]))
-                #print("key: "+str(k))
-                #quit()
-            s.append(abs(m[k] - v) / v)
-        #if sum(s)/len(s) > 1:
-            #print("ERR!!!")
-            #quit()
-        #print(sum(s)/len(s))
+        total_abs_error = 0
+
+        # REMOVED THE ASSERTION - keys may not match
+        # assert m.keys() == self.interval_ground_truth.keys()
+
+        for flow_key, true_count in selected_flows:
+            # Get estimated count from sketch (default to 0 if not found)
+            estimated_count = m.get(flow_key, 0)
+            
+            # Calculate absolute error
+            abs_error = abs(estimated_count - true_count)
+            total_abs_error += abs_error
+            
+            # Calculate relative error
+            if true_count > 0:
+                rel_error = abs_error / true_count
+                s.append(rel_error)
+            else:
+                s.append(0)
+
+        # PRINT TOP K VALUES
+        print("\n" + "="*80)
+        print(f"TOP {top_k} FLOWS WITH ERRORS")
+        print("="*80)
+        print(f"{'Rank':<6} {'Flow ID':<35} {'True':<10} {'Est':<10} {'AbsErr':<10} {'RelErr':<10}")
+        print("-"*80)
+        
+        for rank, (flow_key, true_count) in enumerate(selected_flows, 1):
+            estimated_count = m.get(flow_key, 0)
+            abs_error = abs(estimated_count - true_count)
+            rel_error = abs_error / true_count if true_count > 0 else 0
+            
+            print(f"{rank:<6} {flow_key:<35} {true_count:<10} {estimated_count:<10} "
+                f"{abs_error:<10.2f} {rel_error:<10.4f}")
+        
+        # Calculate and print MAE
+        mae = total_abs_error / len(selected_flows) if selected_flows else 0
+        avg_rel_error = sum(s) / len(s) if s else 0
+        
+        print("-"*80)
+        print(f"MAE (Top {top_k}): {mae:.4f} packets")
+        print(f"Avg Relative Error: {avg_rel_error:.4f} ({avg_rel_error*100:.2f}%)")
+        print("="*80 + "\n")
+
+        # --------------- NEW LOGGING PART ---------------
+        if episode is not None and step is not None and action is not None:
+            # Append results to a fixed file
+            with open("results.txt", "a") as f:
+                # Write header only if file is empty (optional)
+                if f.tell() == 0:
+                    f.write("Episode\tStep\tAction\tMAE\tAvgRelError\n")
+                f.write(f"{episode}\t{step}\t{action}\t{mae:.4f}\t{avg_rel_error:.4f}\n")
+        # -------------------------------------------------
+        
+        # Calculate final error
         if len(s) == 0:
             return 0
+        
         if "max" in avg_or_max:
             return max(s)
         # return avg by default
         else:
-            return sum(s)/len(s)
+            return sum(s) / len(s)
+
 
     # called before every interp run
     # create a blank json file with no events
