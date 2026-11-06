@@ -1,0 +1,33 @@
+{
+    "symbolicvals" : {
+        "sizes": {
+            "logcols": 14,
+            "rows": 4
+        },
+        "symbolics": {
+	        "cols": 16384
+        }
+    },
+    "traceparams" : {
+        "numpkts" : 500,
+        "numflows" : 300,
+        "distribution" : "skew",
+        "rate" : 1000,
+        "send_background" : true,
+        "background_pkts" : 50
+    },
+    "tracebounds" : {
+        "numpkts" : [100000, 200000],
+        "numflows" : [1000, 20000],
+        "distribution" : ["skew", "random"],
+        "rate" : [1000, 2000]
+    },
+    "optparams": {
+        "maxpkts": 100
+    },
+    "symfile" : "rotating_cms.symb",
+    "lucidfile" : "rotating_cms.dpt",
+    "outputfiles" : ["estimated_counts.pkl", "bits_set.pkl"],
+    "optmodule" : "rotating_cmsopt"
+
+}
