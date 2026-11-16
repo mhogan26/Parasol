@@ -14,7 +14,7 @@
         "distribution" : "skew",
         "rate" : 1000,
         "send_background" : true,
-        "background_pkts" : 70
+        "background_pkts" : 10
     },
     "tracebounds" : {
         "numpkts" : [100000, 200000],

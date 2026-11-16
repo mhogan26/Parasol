@@ -12,7 +12,7 @@ from simulator import *
 # Distribution of the packet: header information
 
 class NetworkingEnv(gym.Env):
-    metadata = {'render.modes': ['console']}
+    metadata = {'render.modes': ['console']} 
 
     def __init__(self, opt_info, o, sim_process):
         super(NetworkingEnv, self).__init__()
@@ -56,7 +56,8 @@ class NetworkingEnv(gym.Env):
         # if action > self.budget:
         #     action = self.budget  # Cap the action at the current budget level
         # # self.budget -= action # Charles: Moving this line after reward calculation.
-        # # Encourage the agent to send as few as possible
+        # # Encourage the agent to send as few
+        #  as possible
         # if self.budget <= 0:
         #     action = 0
 
@@ -82,17 +83,16 @@ class NetworkingEnv(gym.Env):
 
         self.sequence_errors.append(self.avg_err)
 
-
-        print(f"AGENT CHOSE: {action}, ACTUALLY SENT: {bits_to_send}, BUDGET LEFT: {self.budget - bits_to_send}") # Charles: Temporary print statement to check actions and budget.
+        # Charles: Temporary print statement to check actions and budget.
+        print(f"AGENT CHOSE: {action}, ACTUALLY SENT: {bits_to_send}, BUDGET LEFT: {self.budget - bits_to_send}")
 
         # Calculate reward
         self.reward = self._get_reward()
 
+        # Charles: Budget is updated every step, after the reward is calculated. 
         self.budget -= bits_to_send
         
-        # Charles: Original line position (1) here.
-
-        print(self.avg_err)
+        # print(self.avg_err)
         # Shift the state to include the new values and remove the oldest values
         new_state = np.roll(self.state, -2)
         new_state[-2:] = [action, self.avg_err]
@@ -235,10 +235,12 @@ class DQNAgent:
         if self.steps_done % self.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
-    def train(self, episodes=100, log_file="training_rewards.txt"):
+    def train(self, episodes=100, log_file="training_rewards_DQN.txt"):
+        STEPS_PER_EPISODE = 20  # NOTE: Remember to match with the environment's _is_done() method.
+
         # Open the log file and write a header
         with open(log_file, "w") as f:
-            f.write("Episode\tStep\tAction\tReward\n")   # tab‑separated columns
+            f.write("Episode.Step\tAction\tReward\n")   # tab‑separated columns
 
         for e in range(episodes):
             start = time.time()
@@ -253,8 +255,12 @@ class DQNAgent:
                 next_state, reward, num_backgroundpkts, done, _ = self.env.step(action)
                 # NOTE: Charles change this to reward every even step, so that we can see the effect of the action on the environment. This is because the environment is designed to only give a reward every 2 steps (i.e., after sending packets and then measuring the error). If you want to reward every step, you can change this back to reward = reward.
                 self.remember(state, action, reward, next_state, done)
+
+                episode_step = (e + 1) + (counter / STEPS_PER_EPISODE) # Computes the current step in the episode as a float, e.g., 1.0, 1.05, 1.10, ..., 1.95 for episode 1.
+
                 with open(log_file, "a") as f:
-                    f.write(f"{e+1}\t{counter+1}\t{a}\t{reward:.6f}\n")
+                    f.write(f"{episode_step:.2f}\t{a}\t{reward:.6f}\n")
+    
                 state = next_state
                 counter += 1
             self.experience_replay()
@@ -393,11 +399,12 @@ class ActorCriticAgent:
         if self.steps_done % self.target_update == 0:
             self.model.load_state_dict(self.model.state_dict())
 
-    def train(self, episodes=100, log_file="training_rewards.txt"):
+    def train(self, episodes=100, log_file="training_rewards_ACA.txt"):
+        STEPS_PER_EPISODE = 20  # NOTE: Remember to match with the environment's _is_done() method.
 
         # Open the log file and write a header
         with open(log_file, "w") as f:
-            f.write("Episode\tStep\tAction\tReward\n")   # tab‑separated columns
+            f.write("Episode.Step\tAction\tReward\n")   # tab‑separated columns
         
         for e in range(episodes):
             start = time.time()
@@ -411,8 +418,9 @@ class ActorCriticAgent:
                 print("i am training A2C...")
                 next_state, reward, num_backgroundpkts, done, _ = self.env.step(action)
                 self.remember(state, action, reward, next_state, done)
+                episode_step = (e + 1) + (counter / STEPS_PER_EPISODE) # Computes the current step in the episode as a float, e.g., 1.0, 1.05, 1.10, ..., 1.95 for episode 1.
                 with open(log_file, "a") as f:
-                    f.write(f"{e+1}\t{counter+1}\t{a}\t{reward:.6f}\n")
+                    f.write(f"{episode_step:.2f}\t{a}\t{reward:.6f}\n")
                 state = next_state
                 counter += 1
             self.experience_replay()
@@ -500,17 +508,32 @@ class PPOAgent:
     def remember(self, state, action, reward, next_state, done, log_prob):
         self.memory.append((state, action, reward, next_state, done, log_prob))
 
-    def train(self, episodes=100):
+    def train(self, episodes=100, log_file="training_rewards_PPO.txt"):
+        STEPS_PER_EPISODE = 20  # NOTE: Remember to match with the environment's _is_done() method.
+
+        with open(log_file, "w") as f:
+            f.write("Episode.Step\tAction\tReward\n")   # tab‑separated columns
+            
         for e in range(episodes):
+            start = time.time()
+            print("episode", e)
             state = self.env.reset()
             done = False
+            counter = 0
             while not done:
                 action, log_prob = self.choose_action(state)
                 next_state, reward, num_backgroundpkts, done, _ = self.env.step(action)
                 self.remember(state, action, reward, next_state, done, log_prob)
+                episode_step = (e + 1) + (counter / STEPS_PER_EPISODE)
+                with open(log_file, "a") as f:
+                    f.write(f"{episode_step:.2f}\t{action}\t{reward:.6f}\n")
                 state = next_state
+                counter += 1
                 if len(self.memory) >= self.update_frequency:
                     self.experience_replay()
+                    end = time.time()
+                    t = end - start
+                    print(f"Training Time for 1 episode is {t} seconds!!")
 
     def experience_replay(self):
         transitions = list(self.memory)
@@ -578,8 +601,8 @@ def main():
 
     # Initialize and train with Different RL Agent
     # agent = DQNAgent(env)
-    agent = ActorCriticAgent(env)
-    # agent = PPOAgent(env)
+    # agent = ActorCriticAgent(env)
+    agent = PPOAgent(env)
 
     # Train the Q-learning agent
     num_episodes = 50 # change episodes
