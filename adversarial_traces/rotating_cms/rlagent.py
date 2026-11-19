@@ -95,7 +95,7 @@ class NetworkingEnv(gym.Env):
         # print(self.avg_err)
         # Shift the state to include the new values and remove the oldest values
         new_state = np.roll(self.state, -2)
-        new_state[-2:] = [action, self.avg_err]
+        new_state[-2:] = [self.last_action, self.avg_err]
         self.state = new_state
         
         print("background", num_backgroundpkts)
@@ -115,13 +115,15 @@ class NetworkingEnv(gym.Env):
         bits_to_send = action  # Action is now directly the number of packets to send
 
     def _get_reward(self):
-        # Calculate and return the reward for the current state     
-        return self.avg_err
+        # Calculate and return the reward for the current state   
+        if self.round_counter % 2 == 0:
+            return self.avg_err  
+        return 0.0
 
     def _is_done(self):
         # Check if the episode is done based on the round counter
         # Charles: Changed to 20, originally 5.
-        if self.round_counter >= 20:  # Assuming an episode ends after 20 rounds
+        if self.round_counter >= 20:  # Assuming an episode ends after 20 
             return True
         return False
 
@@ -175,7 +177,7 @@ class DQNAgent:
         self.memory.append((state, action, reward, next_state, done))
 
 
-    def choose_action(self, state, test=False, EPS_START=0.9, EPS_END=0.05, EPS_DECAY=2500):
+    def choose_action(self, state, test=False, EPS_START=0.9, EPS_END=0.05, EPS_DECAY=200):
         self.steps_done += 1
         sample = random.random()
         eps_threshold = EPS_END + (EPS_START - EPS_END) * \
@@ -235,8 +237,10 @@ class DQNAgent:
         if self.steps_done % self.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
-    def train(self, episodes=100, log_file="training_rewards_DQN.txt"):
+    def train(self, episodes=100, log_file="training_rewards_DQN.txt", updates_per_episode=None):
         STEPS_PER_EPISODE = 20  # NOTE: Remember to match with the environment's _is_done() method.
+        if updates_per_episode is None:
+            updates_per_episode = STEPS_PER_EPISODE  # ~1 gradient step per env step
 
         # Open the log file and write a header
         with open(log_file, "w") as f:
@@ -263,7 +267,8 @@ class DQNAgent:
     
                 state = next_state
                 counter += 1
-            self.experience_replay()
+            for _ in range(updates_per_episode):
+                self.experience_replay()
             end = time.time()
             t = end - start
             print(f"Training Time for 1 episode is {t} seconds!!")
@@ -282,9 +287,9 @@ class DQNAgent:
                 # action = self.choose_action(state, test=True) # Notice the test flag
 
             # Custom action_lists - Comment out to test individually
-            action_list = [1,0,1,0,1,0]
-            # action_list = [0,0,0,0,0,0]
-            # action_list = [random.randint(0, 1) for _ in range(6)]
+            action_list = [1,0] * 10
+            # action_list = [0,0] * 10
+            # action_list = [random.randint(0, 1) for _ in range(10)]
 
 
             for i in action_list:
@@ -399,8 +404,10 @@ class ActorCriticAgent:
         if self.steps_done % self.target_update == 0:
             self.model.load_state_dict(self.model.state_dict())
 
-    def train(self, episodes=100, log_file="training_rewards_ACA.txt"):
+    def train(self, episodes=100, log_file="training_rewards_ACA_11_19.txt", updates_per_episode=None):
         STEPS_PER_EPISODE = 20  # NOTE: Remember to match with the environment's _is_done() method.
+        if updates_per_episode is None:
+            updates_per_episode = STEPS_PER_EPISODE
 
         # Open the log file and write a header
         with open(log_file, "w") as f:
@@ -423,7 +430,9 @@ class ActorCriticAgent:
                     f.write(f"{episode_step:.2f}\t{a}\t{reward:.6f}\n")
                 state = next_state
                 counter += 1
-            self.experience_replay()
+
+            for _ in range(updates_per_episode):
+                self.experience_replay()
             end = time.time()
             print(f"Training Time for 1 episode is {end - start} seconds!!")
 
@@ -434,9 +443,9 @@ class ActorCriticAgent:
             state = self.env.reset()
             episode_rewards = 0
             done = False
-            action_list = [1, 0, 1, 0, 1, 0]
-            # action_list = [0, 0, 0, 0, 0, 0]
-            # action_list = [random.randint(0, 1) for _ in range(6)]
+            action_list = [1, 0] * 10
+            # action_list = [0] * 20
+            # action_list = [random.randint(0, 1) for _ in range(20)]
             # while not done:
             for i in action_list:
                 action = i
@@ -481,7 +490,7 @@ class PPO(nn.Module):
         return action_probs, state_values
 
 class PPOAgent:
-    def __init__(self, env, hidden_size=128, gamma=0.99, learning_rate=1e-3, clip_epsilon=0.2, update_frequency=2048, k_epochs=10, batch_size=64):
+    def __init__(self, env, hidden_size=128, gamma=0.99, learning_rate=1e-3, clip_epsilon=0.2, update_frequency=100, k_epochs=10, batch_size=64): # NOTE:update_frequency=2048 before.
         self.env = env
         self.gamma = gamma
         self.clip_epsilon = clip_epsilon
@@ -540,31 +549,66 @@ class PPOAgent:
         self.memory.clear()
 
         state_batch, action_batch, reward_batch, next_state_batch, done_batch, log_prob_batch = zip(*transitions)
-        state_batch = torch.tensor(state_batch, dtype=torch.float32)
+        state_batch = torch.tensor(np.array(state_batch), dtype=torch.float32)
         action_batch = torch.tensor(action_batch, dtype=torch.long)
         reward_batch = torch.tensor(reward_batch, dtype=torch.float32)
-        next_state_batch = torch.tensor(next_state_batch, dtype=torch.float32)
+        next_state_batch = torch.tensor(np.array(next_state_batch), dtype=torch.float32)
         done_batch = torch.tensor(done_batch, dtype=torch.float32)
-        old_log_probs = torch.stack(log_prob_batch)
+        old_log_probs = torch.stack(log_prob_batch).squeeze(-1)
+
+        with torch.no_grad():
+            _, next_values = self.model(next_state_batch)
+            next_values = next_values.squeeze(-1)
+            targets = reward_batch + self.gamma * next_values * (1 - done_batch)
+            _, old_values = self.model(state_batch)
+            advantages = targets - old_values.squeeze(-1)
 
         for _ in range(self.k_epochs):
-            _, state_values = self.model(state_batch)
-            state_values = state_values.squeeze()
-            advantages = reward_batch + self.gamma * state_values * (1 - done_batch) - state_values.detach()
-
-            new_probs, _ = self.model(state_batch)
+            new_probs, state_values = self.model(state_batch)
+            state_values = state_values.squeeze(-1)
             new_dist = Categorical(new_probs)
             new_log_probs = new_dist.log_prob(action_batch)
 
-            ratios = torch.exp(new_log_probs - old_log_probs.detach())
+            ratios = torch.exp(new_log_probs - old_log_probs)
             surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * advantages
+            surr2 = torch.clamp(ratios, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantages
             policy_loss = -torch.min(surr1, surr2).mean()
-            value_loss = nn.MSELoss()(state_values, reward_batch + self.gamma * state_values * (1 - done_batch))
+            value_loss = nn.MSELoss()(state_values, targets)
 
             self.optimizer.zero_grad()
             (policy_loss + 0.5 * value_loss).backward()
             self.optimizer.step()
+
+    # def experience_replay(self):
+    #     transitions = list(self.memory)
+    #     self.memory.clear()
+
+        # state_batch, action_batch, reward_batch, next_state_batch, done_batch, log_prob_batch = zip(*transitions)
+        # state_batch = torch.tensor(state_batch, dtype=torch.float32)
+        # action_batch = torch.tensor(action_batch, dtype=torch.long)
+        # reward_batch = torch.tensor(reward_batch, dtype=torch.float32)
+        # next_state_batch = torch.tensor(next_state_batch, dtype=torch.float32)
+        # done_batch = torch.tensor(done_batch, dtype=torch.float32)
+        # old_log_probs = torch.stack(log_prob_batch)
+
+        # for _ in range(self.k_epochs):
+        #     _, state_values = self.model(state_batch)
+        #     state_values = state_values.squeeze()
+        #     advantages = reward_batch + self.gamma * state_values * (1 - done_batch) - state_values.detach()
+
+        #     new_probs, _ = self.model(state_batch)
+        #     new_dist = Categorical(new_probs)
+        #     new_log_probs = new_dist.log_prob(action_batch)
+
+        #     ratios = torch.exp(new_log_probs - old_log_probs.detach())
+        #     surr1 = ratios * advantages
+        #     surr2 = torch.clamp(ratios, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * advantages
+        #     policy_loss = -torch.min(surr1, surr2).mean()
+        #     value_loss = nn.MSELoss()(state_values, reward_batch + self.gamma * state_values * (1 - done_batch))
+
+        #     self.optimizer.zero_grad()
+        #     (policy_loss + 0.5 * value_loss).backward()
+        #     self.optimizer.step()
 
     def test(self, episodes=10):
         total_rewards = 0
